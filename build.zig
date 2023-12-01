@@ -26,7 +26,8 @@ pub fn build(b: *std.build.Builder) !void {
         run_cmd.addArg(input_path);
         run_all_step.dependOn(&run_cmd.step);
 
-        const test_cmd = b.addTest(.{ .root_source_file = .{ .path = srcFile }, .target = target, .single_threaded = true, .optimize = mode });
+        const build_test_cmd = b.addTest(.{ .root_source_file = .{ .path = srcFile }, .target = target, .single_threaded = true, .optimize = mode });
+        const test_cmd = b.addRunArtifact(build_test_cmd);
         test_all_step.dependOn(&test_cmd.step);
 
         const run_step = b.step(dayString, b.fmt("Run {s}", .{dayString}));
