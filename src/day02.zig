@@ -5,14 +5,14 @@ pub const main = runner.run(solve);
 
 fn solve(_: std.mem.Allocator, input: []const u8) anyerror!void {
     const result = try possibleGames(input);
-    std.debug.print("possible games: {}\n", .{result});
+    std.debug.print("possible games: {}\n", .{result[0]});
+    std.debug.print("power sum: {}\n", .{result[1]});
 }
 
-fn possibleGames(input: []const u8) !usize {
+fn possibleGames(input: []const u8) ![2]usize {
     var lines = std.mem.split(u8, input, "\n");
-    var result: usize = 0;
-
-    const total_cubes = .{ 12, 13, 14 };
+    var possible_result: usize = 0;
+    var power_result: usize = 0;
 
     while (lines.next()) |line| {
         var l = line[5..];
@@ -25,30 +25,22 @@ fn possibleGames(input: []const u8) !usize {
         }
 
         l = l[i + 2 ..];
-        i = 0;
+
+        const colors = .{ "red", "green", "blue" };
+        const total_cubes: [colors.len]usize = .{ 12, 13, 14 };
+        var min_cubes = [1]usize{0} ** total_cubes.len;
 
         var last_num: usize = 0;
-        const impossible = impossible: while (i < l.len) : (i += 1) {
+        i = 0;
+        while (i < l.len) : (i += 1) {
             const c = l[i];
-            switch (c) {
-                'r' => {
-                    if (last_num > total_cubes[0]) {
-                        break :impossible true;
-                    }
-                    i += 2; // skip "red"
-                },
-                'g' => {
-                    if (last_num > total_cubes[1]) {
-                        break :impossible true;
-                    }
-                    i += 4; // skip "green"
-                },
-                'b' => {
-                    if (last_num > total_cubes[2]) {
-                        break :impossible true;
-                    }
-                    i += 3; // skip "blue"
-                },
+
+            inline for (colors, 0..) |color, j| {
+                if (c == color[0]) {
+                    min_cubes[j] = @max(last_num, min_cubes[j]);
+                    i += color.len - 1;
+                }
+            } else switch (c) {
                 ',', ';' => last_num = 0,
                 '0'...'9' => {
                     last_num *= 10;
@@ -56,14 +48,26 @@ fn possibleGames(input: []const u8) !usize {
                 },
                 else => {},
             }
-        } else false;
-
-        if (!impossible) {
-            result += game;
         }
+
+        var c: usize = 0;
+        var possible = true;
+        var power: usize = 1;
+        while (c < total_cubes.len) : (c += 1) {
+            if (min_cubes[c] > total_cubes[c]) {
+                possible = false;
+            }
+            power *= min_cubes[c];
+        }
+
+        if (possible) {
+            possible_result += game;
+        }
+
+        power_result += power;
     }
 
-    return result;
+    return .{ possible_result, power_result };
 }
 
 test {
@@ -76,5 +80,9 @@ test {
     ;
 
     const example_result: usize = 8;
-    try std.testing.expectEqual(example_result, try possibleGames(input));
+    const result = try possibleGames(input);
+    try std.testing.expectEqual(example_result, result[0]);
+
+    const example_result2: usize = 2286;
+    try std.testing.expectEqual(example_result2, result[1]);
 }
