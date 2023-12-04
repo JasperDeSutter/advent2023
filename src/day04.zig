@@ -5,11 +5,13 @@ pub const main = runner.run(solve);
 
 fn solve(_: std.mem.Allocator, input: []const u8) anyerror!void {
     const result = try scratchcards(input);
-    std.debug.print("04 scratch card points: {}\n", .{result});
+    std.debug.print("04 scratch card points: {}\n", .{result[0]});
+    std.debug.print("04 scratch cards total: {}\n", .{result[1]});
 }
 
-fn scratchcards(input: []const u8) !usize {
-    var result: usize = 0;
+fn scratchcards(input: []const u8) ![2]usize {
+    var points: usize = 0;
+    var total_scratchcards: usize = 0;
 
     var i: usize = 0;
     while (input[i] != ':') {
@@ -21,6 +23,9 @@ fn scratchcards(input: []const u8) !usize {
         i += 1;
     }
     const separator = i + 1;
+
+    var buffer = [_]usize{0} ** 10;
+    var buffer_idx: usize = 0;
 
     var lines = std.mem.split(u8, input, "\n");
     while (lines.next()) |line| {
@@ -42,11 +47,19 @@ fn scratchcards(input: []const u8) !usize {
         }
         if (matches > 0) {
             const one: usize = 1;
-            result += (one << (matches - 1));
+            points += (one << (matches - 1));
+        }
+
+        const count = 1 + buffer[buffer_idx];
+        total_scratchcards += count;
+        buffer[buffer_idx] = 0;
+        buffer_idx = (buffer_idx + 1) % buffer.len;
+        for (0..matches) |j| {
+            buffer[(buffer_idx + j) % buffer.len] += count;
         }
     }
 
-    return result;
+    return .{ points, total_scratchcards };
 }
 
 test {
@@ -61,5 +74,8 @@ test {
 
     const example_result: usize = 13;
     const result = try scratchcards(input);
-    try std.testing.expectEqual(example_result, result);
+    try std.testing.expectEqual(example_result, result[0]);
+
+    const example_result2: usize = 30;
+    try std.testing.expectEqual(example_result2, result[1]);
 }
