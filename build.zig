@@ -11,7 +11,7 @@ pub fn build(b: *std.build.Builder) !void {
     const run_all_step = b.step("all", "Run all");
 
     var day: u32 = 1;
-    const end: u32 = 4;
+    const end: u32 = 5;
     while (day <= end) : (day += 1) {
         var dayStringBuf: [5]u8 = undefined;
         const dayString = try std.fmt.bufPrint(dayStringBuf[0..], "day{:0>2}", .{day});
@@ -19,6 +19,7 @@ pub fn build(b: *std.build.Builder) !void {
         const srcFile = b.fmt("src/{s}.zig", .{dayString});
 
         const exe = b.addExecutable(.{ .name = dayString, .root_source_file = .{ .path = srcFile }, .target = target, .single_threaded = true, .optimize = mode });
+        b.installArtifact(exe);
 
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
