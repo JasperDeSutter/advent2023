@@ -16,35 +16,35 @@ fn lowestLocation(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     var lines = std.mem.split(u8, input, "\n");
     const seedsLine = lines.next().?;
 
-    var mapping = std.ArrayList(std.ArrayList([3]usize)).init(alloc);
+    var mapping = std.ArrayListUnmanaged(std.ArrayListUnmanaged([3]usize)){};
     defer {
-        for (mapping.items) |item| {
-            item.deinit();
+        for (0..mapping.items.len) |i| {
+            mapping.items[i].deinit(alloc);
         }
-        mapping.deinit();
+        mapping.deinit(alloc);
     }
-    var last: ?*std.ArrayList([3]usize) = null;
+    var last: *std.ArrayListUnmanaged([3]usize) = undefined;
 
     while (lines.next()) |line| {
         if (line.len == 0) {
-            const ptr = try mapping.addOne();
-            ptr.* = std.ArrayList([3]usize).init(alloc);
-            last = ptr;
+            last = try mapping.addOne(alloc);
+            last.* = .{};
         } else if (std.ascii.isDigit(line[0])) {
-            var nums = std.mem.split(u8, line, " ");
-            const first = try std.fmt.parseInt(usize, nums.next().?, 10);
-            const second = try std.fmt.parseInt(usize, nums.next().?, 10);
-            const third = second + try std.fmt.parseInt(usize, nums.next().?, 10);
+            const arr = try last.addOne(alloc);
+            var slice: []usize = arr;
 
-            var l = last.?;
-            for (l.items, 0..) |item, i| {
-                if (item[1] > second) {
-                    try l.insert(i, .{ first, second, third });
-                    break;
+            var num: usize = 0;
+            for (line) |i| {
+                if (i == ' ') {
+                    slice[0] = num;
+                    slice = slice[1..];
+                    num = 0;
+                } else {
+                    num *= 10;
+                    num += i - '0';
                 }
-            } else {
-                try l.append(.{ first, second, third });
             }
+            arr[2] = num + arr[1];
         }
     }
 
@@ -52,15 +52,13 @@ fn lowestLocation(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     var prev: ?usize = null;
     while (seeds.next()) |seed_str| {
         const seed = try std.fmt.parseInt(usize, seed_str, 10);
-        const single = mapValue(seed, mapping.items);
+        const single = mapValue(.{ seed, 1 }, mapping.items);
         if (single < result) result = single;
 
         if (prev) |start| {
-            for (start..start + seed) |i| {
-                const value = mapValue(i, mapping.items);
-                if (value < resultRange) {
-                    resultRange = value;
-                }
+            const value = mapValue(.{ start, seed }, mapping.items);
+            if (value < resultRange) {
+                resultRange = value;
             }
 
             prev = null;
@@ -72,32 +70,32 @@ fn lowestLocation(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     return .{ result, resultRange };
 }
 
-fn mapValue(startValue: usize, mapping: []const std.ArrayList([3]usize)) usize {
-    var value = startValue;
-    for (mapping) |item| {
-        if (item.items[0][1] < value and item.items[item.items.len - 1][2] < value) {
-            continue;
-        }
-        var left: usize = 0;
-        var right: usize = item.items.len;
+fn mapValue(range: [2]usize, mapping: []const std.ArrayListUnmanaged([3]usize)) usize {
+    var min: usize = std.math.maxInt(usize);
+    var mapped: usize = 0;
 
-        while (left < right) {
-            const mid = left + (right - left) / 2;
+    while (mapped < range[1]) {
+        var value = range[0] + mapped;
+        var active = range[1] - mapped;
+        for (mapping) |item| {
+            for (item.items) |map| {
+                const mappable = map[2] -| value;
+                if (map[1] <= value and mappable > 0) {
+                    if (mappable < active) {
+                        active = mappable;
+                    }
 
-            const map = item.items[mid];
-            if (map[1] <= value) {
-                if (map[2] > value) {
                     value += map[0];
                     value -= map[1];
                     break;
                 }
-                left = mid + 1;
-            } else {
-                right = mid;
             }
         }
+        mapped += active;
+        if (value < min) min = value;
     }
-    return value;
+
+    return min;
 }
 
 test {
