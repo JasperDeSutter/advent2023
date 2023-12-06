@@ -23,20 +23,25 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     var actual_time: usize = 0;
     var actual_distance: usize = 0;
     while (times.next()) |time_s| {
-        const time = try std.fmt.parseInt(usize, time_s, 10);
-        const distance_s = distances.next().?;
-        const distance = try std.fmt.parseInt(usize, distance_s, 10);
-        result[0] *= theThing(time, distance);
-
+        var time: usize = 0;
         for (time_s) |c| {
+            time *= 10;
+            time += c - '0';
             actual_time *= 10;
-            actual_time += c - '0';
         }
 
+        const distance_s = distances.next().?;
+        var distance: usize = 0;
         for (distance_s) |c| {
+            distance *= 10;
+            distance += c - '0';
             actual_distance *= 10;
-            actual_distance += c - '0';
         }
+
+        actual_time += time;
+        actual_distance += distance;
+
+        result[0] *= theThing(time, distance);
     }
     result[1] = theThing(actual_time, actual_distance);
 
@@ -44,21 +49,21 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
 }
 
 fn theThing(time: usize, distance: usize) usize {
-    var i: usize = 0;
-    while (i < time) : (i += 1) {
-        const dist = (time - i) * i;
-        if (dist > distance) {
-            break;
+    var left: usize = 0;
+    var right = time / 2;
+
+    // binary search for first time that works
+    while (left < right) {
+        const mid = (left + right) / 2;
+        if ((time - mid) * mid <= distance) {
+            left = mid + 1;
+        } else {
+            right = mid;
         }
     }
 
-    for (i..time + 1) |j| {
-        const dist = (time - j) * j;
-        if (dist <= distance) {
-            return (j - i);
-        }
-    }
-    return 1;
+    // the inverse is the same, so apply twice
+    return time - (right * 2) + 1;
 }
 
 test {
