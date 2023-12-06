@@ -20,29 +20,45 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     _ = times.next().?;
     _ = distances.next().?;
 
+    var actual_time: usize = 0;
+    var actual_distance: usize = 0;
     while (times.next()) |time_s| {
         const time = try std.fmt.parseInt(usize, time_s, 10);
         const distance_s = distances.next().?;
         const distance = try std.fmt.parseInt(usize, distance_s, 10);
+        result[0] *= theThing(time, distance);
 
-        var i: usize = 0;
-        while (i < time) : (i += 1) {
-            const dist = (time - i) * i;
-            if (dist > distance) {
-                break;
-            }
+        for (time_s) |c| {
+            actual_time *= 10;
+            actual_time += c - '0';
         }
 
-        for (i..time + 1) |j| {
-            const dist = (time - j) * j;
-            if (dist <= distance) {
-                result[0] *= (j - i);
-                break;
-            }
+        for (distance_s) |c| {
+            actual_distance *= 10;
+            actual_distance += c - '0';
+        }
+    }
+    result[1] = theThing(actual_time, actual_distance);
+
+    return result;
+}
+
+fn theThing(time: usize, distance: usize) usize {
+    var i: usize = 0;
+    while (i < time) : (i += 1) {
+        const dist = (time - i) * i;
+        if (dist > distance) {
+            break;
         }
     }
 
-    return result;
+    for (i..time + 1) |j| {
+        const dist = (time - j) * j;
+        if (dist <= distance) {
+            return (j - i);
+        }
+    }
+    return 1;
 }
 
 test {
@@ -54,6 +70,6 @@ test {
     const example_result: usize = 288;
     const result = try impl(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
-    // const example_result_range: usize = 46;
-    // try std.testing.expectEqual(example_result_range, result[1]);
+    const example_result_range: usize = 71503;
+    try std.testing.expectEqual(example_result_range, result[1]);
 }
