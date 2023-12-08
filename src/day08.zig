@@ -18,7 +18,7 @@ fn id(name: []const u8) u16 {
 }
 
 fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
-    var result: [2]usize = .{ 0, 0 };
+    var result: [2]usize = .{ 0, 1 };
 
     var lines = std.mem.split(u8, input, "\n");
     const directions = lines.next().?;
@@ -27,31 +27,59 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     var map = std.AutoHashMap(u16, [2]u16).init(alloc);
     defer map.deinit();
 
+    var steps = std.ArrayList(u16).init(alloc);
+    defer steps.deinit();
+
     while (lines.next()) |line| {
         const node = id(line[0..3]);
         const left = id(line[7..10]);
         const right = id(line[12..15]);
         try map.put(node, .{ left, right });
+
+        if (line[2] == 'A') {
+            try steps.append(node);
+        }
     }
 
-    const end = id("ZZZ");
-    var step: u16 = 0;
-    outer: while (true) {
-        for (directions, 0..) |dir, i| {
-            const node = map.get(step).?;
-            step = switch (dir) {
-                'L' => node[0],
-                else => node[1],
-            };
-            if (step == end) {
-                result[0] += i + 1;
-                break :outer;
+    const end = 'Z' - 'A';
+    for (steps.items) |s| {
+        var step = s;
+        var loops: usize = 0;
+        outer: while (true) {
+            for (directions, 0..) |dir, i| {
+                const node = map.get(step).?;
+                step = switch (dir) {
+                    'L' => node[0],
+                    else => node[1],
+                };
+                if (step & 0x1F == end) {
+                    loops += i + 1;
+                    break :outer;
+                }
             }
+            loops += directions.len;
         }
-        result[0] += directions.len;
+        if (s == 0) {
+            result[0] = loops;
+        }
+
+        const a = result[1];
+        const b = loops;
+        result[1] = a * b / try gcd(a, b);
     }
 
     return result;
+}
+
+fn gcd(a: usize, b: usize) !usize {
+    var b2 = b;
+    var a2 = a;
+    while (b2 != 0) {
+        const t = b2;
+        b2 = try std.math.mod(usize, a2, b2);
+        a2 = t;
+    }
+    return a2;
 }
 
 test {
@@ -68,9 +96,8 @@ test {
     ;
 
     const result = try impl(std.testing.allocator, input);
-    const example_result: [2]usize = .{ 2, 0 };
-    try std.testing.expectEqual(example_result[0], result[0]);
-    try std.testing.expectEqual(example_result[1], result[1]);
+    const example_result: usize = 2;
+    try std.testing.expectEqual(example_result, result[0]);
 }
 
 test {
@@ -85,4 +112,23 @@ test {
     const result = try impl(std.testing.allocator, input);
     const example_result: usize = 6;
     try std.testing.expectEqual(example_result, result[0]);
+}
+
+test {
+    const input =
+        \\LR
+        \\
+        \\IIA = (IIB, XXX)
+        \\IIB = (XXX, IIZ)
+        \\IIZ = (IIB, XXX)
+        \\JJA = (JJB, XXX)
+        \\JJB = (JJC, JJC)
+        \\JJC = (JJZ, JJZ)
+        \\JJZ = (JJB, JJB)
+        \\XXX = (XXX, XXX)
+    ;
+
+    const result = try impl(std.testing.allocator, input);
+    const example_result: usize = 6;
+    try std.testing.expectEqual(example_result, result[1]);
 }
