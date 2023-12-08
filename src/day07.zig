@@ -1,13 +1,7 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
-
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try impl(alloc, input);
-    std.debug.print("07 part 1: {}\n", .{result[0]});
-    std.debug.print("07 part 2: {}\n", .{result[1]});
-}
+pub const main = runner.run("07", solve);
 
 const Kind = enum(u8) {
     HighCard,
@@ -94,7 +88,7 @@ fn get_kind(highest: u8, pairs: u8) Kind {
     }
 }
 
-fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
+fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var result: [2]usize = .{ 0, 0 };
 
     var hands = std.ArrayList(Hand).init(alloc);
@@ -172,7 +166,7 @@ test {
     ;
 
     const example_result: usize = 6440;
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
     const example_result_range: usize = 5905;
     try std.testing.expectEqual(example_result_range, result[1]);
@@ -202,7 +196,7 @@ test {
     ;
 
     const example_result: usize = 6592;
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
     const example_result_range: usize = 6839;
     try std.testing.expectEqual(example_result_range, result[1]);

@@ -1,13 +1,7 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
-
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try partNumbers(alloc, input);
-    std.debug.print("03 part numbers: {}\n", .{result[0]});
-    std.debug.print("03 gear ratios: {}\n", .{result[1]});
-}
+pub const main = runner.run("03", solve);
 
 const Gears = std.MultiArrayList(struct {
     offset: usize,
@@ -51,7 +45,7 @@ fn checkPart(c: u8, offset: usize, state: *State) !void {
     state.match = true;
 }
 
-fn partNumbers(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
+fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var part_numbers: usize = 0;
     var gear_ratios: usize = 0;
 
@@ -128,10 +122,9 @@ test {
         \\.664.598..
     ;
 
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 4361;
-    const result = try partNumbers(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
-
     const example_result2: usize = 467835;
     try std.testing.expectEqual(example_result2, result[1]);
 }

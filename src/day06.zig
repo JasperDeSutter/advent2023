@@ -1,15 +1,9 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
+pub const main = runner.run("06", solve);
 
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try impl(alloc, input);
-    std.debug.print("06 part 1: {}\n", .{result[0]});
-    std.debug.print("06 part 2: {}\n", .{result[1]});
-}
-
-fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
+fn solve(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     _ = alloc;
     var result: [2]usize = .{ 1, 0 };
 
@@ -73,7 +67,7 @@ test {
     ;
 
     const example_result: usize = 288;
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
     const example_result_range: usize = 71503;
     try std.testing.expectEqual(example_result_range, result[1]);

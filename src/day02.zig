@@ -1,15 +1,9 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
+pub const main = runner.run("02", solve);
 
-fn solve(_: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try possibleGames(input);
-    std.debug.print("possible games: {}\n", .{result[0]});
-    std.debug.print("power sum: {}\n", .{result[1]});
-}
-
-fn possibleGames(input: []const u8) ![2]usize {
+fn solve(_: std.mem.Allocator, input: []const u8) ![2]usize {
     var lines = std.mem.split(u8, input, "\n");
     var possible_result: usize = 0;
     var power_result: usize = 0;
@@ -79,10 +73,9 @@ test {
         \\Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green
     ;
 
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 8;
-    const result = try possibleGames(input);
     try std.testing.expectEqual(example_result, result[0]);
-
     const example_result2: usize = 2286;
     try std.testing.expectEqual(example_result2, result[1]);
 }

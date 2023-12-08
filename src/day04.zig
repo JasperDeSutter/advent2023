@@ -1,15 +1,9 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
+pub const main = runner.run("04", solve);
 
-fn solve(_: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try scratchcards(input);
-    std.debug.print("04 scratch card points: {}\n", .{result[0]});
-    std.debug.print("04 scratch cards total: {}\n", .{result[1]});
-}
-
-fn scratchcards(input: []const u8) ![2]usize {
+fn solve(_: std.mem.Allocator, input: []const u8) ![2]usize {
     var points: usize = 0;
     var total_scratchcards: usize = 0;
 
@@ -72,10 +66,9 @@ test {
         \\Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11
     ;
 
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 13;
-    const result = try scratchcards(input);
     try std.testing.expectEqual(example_result, result[0]);
-
     const example_result2: usize = 30;
     try std.testing.expectEqual(example_result2, result[1]);
 }

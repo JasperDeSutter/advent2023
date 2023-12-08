@@ -1,13 +1,7 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
-
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try impl(alloc, input);
-    std.debug.print("08 part 1: {}\n", .{result[0]});
-    std.debug.print("08 part 2: {}\n", .{result[1]});
-}
+pub const main = runner.run("08", solve);
 
 fn id(name: []const u8) u16 {
     var result: u16 = 0;
@@ -17,7 +11,7 @@ fn id(name: []const u8) u16 {
     return result;
 }
 
-fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
+fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var result: [2]usize = .{ 0, 0 };
 
     var lines = std.mem.split(u8, input, "\n");
@@ -86,7 +80,7 @@ test {
         \\ZZZ = (ZZZ, ZZZ)
     ;
 
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 2;
     try std.testing.expectEqual(example_result, result[0]);
 }
@@ -100,7 +94,7 @@ test {
         \\ZZZ = (ZZZ, ZZZ)
     ;
 
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 6;
     try std.testing.expectEqual(example_result, result[0]);
 }
@@ -119,7 +113,7 @@ test {
         \\XXX = (XXX, XXX)
     ;
 
-    const result = try impl(std.testing.allocator, input);
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 6;
     try std.testing.expectEqual(example_result, result[1]);
 }

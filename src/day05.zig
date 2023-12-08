@@ -1,15 +1,9 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
+pub const main = runner.run("05", solve);
 
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror!void {
-    const result = try lowestLocation(alloc, input);
-    std.debug.print("05 lowest location: {}\n", .{result[0]});
-    std.debug.print("05 lowest location range: {}\n", .{result[1]});
-}
-
-fn lowestLocation(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
+fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var result: usize = std.math.maxInt(usize);
     var resultRange: usize = std.math.maxInt(usize);
 
@@ -135,8 +129,8 @@ test {
         \\56 93 4
     ;
 
+    const result = try solve(std.testing.allocator, input);
     const example_result: usize = 35;
-    const result = try lowestLocation(std.testing.allocator, input);
     try std.testing.expectEqual(example_result, result[0]);
     const example_result_range: usize = 46;
     try std.testing.expectEqual(example_result_range, result[1]);

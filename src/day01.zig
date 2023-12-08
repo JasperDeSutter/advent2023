@@ -1,14 +1,12 @@
 const std = @import("std");
 const runner = @import("runner.zig");
 
-pub const main = runner.run(solve);
+pub const main = runner.run("01", solve);
 
-fn solve(_: std.mem.Allocator, input: []const u8) anyerror!void {
+fn solve(_: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     const result = try calibrationValue(input);
-    std.debug.print("calibration value: {}\n", .{result});
-
     const result2 = try calibrationValue2(input);
-    std.debug.print("calibration value with digits: {}\n", .{result2});
+    return .{ result, result2 };
 }
 
 fn calibrationValue(input: []const u8) !usize {
