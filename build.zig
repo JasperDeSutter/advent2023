@@ -24,6 +24,7 @@ pub fn build(b: *std.build.Builder) !void {
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
         const input_path = b.pathFromRoot(b.fmt("inputdata/{s}.txt", .{dayString}));
+        exe.addAnonymousModule(b.fmt("inputdata/{s}.txt", .{dayString}), .{ .source_file = .{ .path = input_path } });
         run_cmd.addArg(input_path);
         run_all_step.dependOn(&run_cmd.step);
 

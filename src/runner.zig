@@ -28,6 +28,7 @@ pub fn run(
 
             const input = try read_file(alloc);
             defer alloc.free(input);
+            // const input = @embedFile("inputdata/day" ++ day ++ ".txt");
 
             const start = std.time.nanoTimestamp();
             const result = try solve(alloc, input);
