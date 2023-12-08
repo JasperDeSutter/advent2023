@@ -18,14 +18,14 @@ fn id(name: []const u8) u16 {
 }
 
 fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
-    var result: [2]usize = .{ 0, 1 };
+    var result: [2]usize = .{ 0, 0 };
 
     var lines = std.mem.split(u8, input, "\n");
     const directions = lines.next().?;
     _ = lines.next().?;
 
-    var map = std.AutoHashMap(u16, [2]u16).init(alloc);
-    defer map.deinit();
+    var map = try alloc.alloc([2]u16, id("ZZZ") + 1);
+    defer alloc.free(map);
 
     var steps = std.ArrayList(u16).init(alloc);
     defer steps.deinit();
@@ -34,7 +34,7 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
         const node = id(line[0..3]);
         const left = id(line[7..10]);
         const right = id(line[12..15]);
-        try map.put(node, .{ left, right });
+        map[node] = .{ left, right };
 
         if (line[2] == 'A') {
             try steps.append(node);
@@ -45,41 +45,32 @@ fn impl(alloc: std.mem.Allocator, input: []const u8) ![2]usize {
     for (steps.items) |s| {
         var step = s;
         var loops: usize = 0;
-        outer: while (true) {
-            for (directions, 0..) |dir, i| {
-                const node = map.get(step).?;
+        while (step & 0x1F != end) {
+            for (directions) |dir| {
+                const node = map[step];
                 step = switch (dir) {
                     'L' => node[0],
                     else => node[1],
                 };
-                if (step & 0x1F == end) {
-                    loops += i + 1;
-                    break :outer;
-                }
             }
             loops += directions.len;
         }
-        if (s == 0) {
+
+        const start_p1 = id("AAA");
+        if (s == start_p1) {
             result[0] = loops;
         }
 
         const a = result[1];
-        const b = loops;
-        result[1] = a * b / try gcd(a, b);
+        if (a > 0) {
+            // loop lengths are always a prime * direction count
+            result[1] = a * loops / directions.len;
+        } else {
+            result[1] = loops;
+        }
     }
 
     return result;
-}
-
-fn gcd(a: usize, b: usize) !usize {
-    var b2 = b;
-    var a2 = a;
-    while (b2 != 0) {
-        const t = b2;
-        b2 = try std.math.mod(usize, a2, b2);
-        a2 = t;
-    }
-    return a2;
 }
 
 test {
