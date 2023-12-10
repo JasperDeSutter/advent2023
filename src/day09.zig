@@ -7,21 +7,35 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var sum: isize = 0;
     var sumStart: isize = 0;
 
-    var lines = std.mem.split(u8, input, "\n");
     var numbers = std.ArrayList(i32).init(alloc);
     defer numbers.deinit();
 
     var starts = std.ArrayList(i32).init(alloc);
     defer starts.deinit();
 
-    while (lines.next()) |line| {
+    var j: usize = 0;
+    while (j < input.len) : (j += 1) {
         numbers.items.len = 0;
         starts.items.len = 0;
-        var parts = std.mem.split(u8, line, " ");
-        while (parts.next()) |part| {
-            const num = try std.fmt.parseInt(i32, part, 10);
-            try numbers.append(num);
+
+        var last_num: i32 = 0;
+        var neg = false;
+        while (j < input.len) : (j += 1) {
+            const c = input[j];
+            switch (c) {
+                '\n' => break,
+                ' ' => {
+                    if (neg) last_num = -last_num;
+                    try numbers.append(last_num);
+                    neg = false;
+                    last_num = 0;
+                },
+                '-' => neg = true,
+                else => last_num = last_num * 10 + (c - '0'),
+            }
         }
+        if (neg) last_num = -last_num;
+        try numbers.append(last_num);
 
         var len = numbers.items.len - 1;
 
