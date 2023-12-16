@@ -27,10 +27,15 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         defer hashMap.deinit();
 
         var parts = std.mem.splitScalar(u8, input, ',');
+        const tombstone = "";
         while (parts.next()) |part| {
             if (part[part.len - 1] == '-') {
                 const key = part[0 .. part.len - 1];
-                _ = hashMap.orderedRemove(key);
+                if (hashMap.getEntry(key)) |entry| {
+                    const key_ptr = @constCast(entry.key_ptr);
+                    key_ptr.* = tombstone;
+                    entry.value_ptr.* = 0;
+                }
             } else {
                 const key = part[0 .. part.len - 2];
                 const value = part[part.len - 1] - '0';
@@ -41,20 +46,17 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         var iter = hashMap.iterator();
         var slots = [1]u8{0} ** 256;
         while (iter.next()) |it| {
-            var current_hash: u8 = 0;
-            for (it.key_ptr.*) |c| {
-                var tmp: usize = c;
-                tmp = ((tmp + current_hash) * 17);
-                current_hash = @truncate(tmp);
+            if (it.value_ptr.* == 0) {
+                continue;
+            }
+            var current_hash: usize = 0;
+            const name = it.key_ptr.*;
+            for (name) |c| {
+                current_hash = ((c + current_hash) * 17) % 256;
             }
             slots[current_hash] += 1;
 
-            var focus: usize = current_hash;
-            focus += 1;
-            focus *= it.value_ptr.*;
-            focus *= slots[current_hash];
-
-            focusingPower += focus;
+            focusingPower += (current_hash + 1) * it.value_ptr.* * slots[current_hash];
         }
     }
 
