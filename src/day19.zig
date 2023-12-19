@@ -89,23 +89,18 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                 const condition_op = item.condition_op;
                 const branch = item.branch;
 
-                if (condition_op == 0) {
+                const result = switch (condition_op) {
+                    '<' => value < condition_value,
+                    '>' => value > condition_value,
+                    else => true,
+                };
+                if (result) {
                     node = branch;
                     break;
-                } else if (condition_op == '<') {
-                    if (value < condition_value) {
-                        node = branch;
-                        break;
-                    }
-                } else if (condition_op == '>') {
-                    if (value > condition_value) {
-                        node = branch;
-                        break;
-                    }
                 }
             }
 
-            if (node.len == 1 and node[0] == 'R' or node[0] == 'A') {
+            if (node.len == 1) {
                 if (node[0] == 'A') {
                     acceptedParts += sum;
                 }
@@ -114,7 +109,52 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         }
     }
 
-    return .{ acceptedParts, 0 };
+    var acceptedNumbers: usize = 0;
+
+    var stack = std.ArrayListUnmanaged(struct { []const u8, [4][2]u16 }){};
+    defer stack.deinit(alloc);
+    try stack.append(alloc, .{ "in", [1][2]u16{.{ 1, 4000 }} ** 4 });
+
+    while (stack.popOrNull()) |item| {
+        const node = item.@"0";
+        var values = item.@"1";
+        if (node.len == 1) {
+            if (node[0] == 'A') {
+                var result: usize = 1;
+                for (values) |v| {
+                    result *= (v[1] - v[0] + 1);
+                }
+                acceptedNumbers += result;
+            }
+            continue;
+        }
+
+        const wf = map.get(node).?;
+        for (wf.items) |workflow| {
+            if (workflow.condition_op != 0) {
+                var right = values[workflow.condition_variable];
+                if (workflow.condition_op == '<') {
+                    right[0] = workflow.condition_value;
+                    values[workflow.condition_variable][1] = workflow.condition_value - 1;
+                } else {
+                    right[1] = workflow.condition_value;
+                    values[workflow.condition_variable][0] = workflow.condition_value + 1;
+                }
+                try stack.append(alloc, .{
+                    workflow.branch,
+                    values,
+                });
+                values[workflow.condition_variable] = right;
+            } else {
+                try stack.append(alloc, .{
+                    workflow.branch,
+                    values,
+                });
+            }
+        }
+    }
+
+    return .{ acceptedParts, acceptedNumbers };
 }
 
 test {
@@ -141,4 +181,6 @@ test {
     const result = try solve(std.testing.allocator, input);
     const example_result: usize = 19114;
     try std.testing.expectEqual(example_result, result[0]);
+    const example_result2: usize = 167409079868000;
+    try std.testing.expectEqual(example_result2, result[1]);
 }
