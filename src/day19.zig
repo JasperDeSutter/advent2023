@@ -3,20 +3,19 @@ const runner = @import("runner.zig");
 
 pub const main = runner.run("16", solve);
 
-fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
-    const Workflow = struct {
-        condition_op: u8,
-        condition_value: u16,
-        condition_variable: u8,
-        branch: []const u8,
-    };
+fn fastParse(comptime T: type, s: []const u8) T {
+    var result: T = 0;
+    var i: usize = 0;
+    while (std.ascii.isDigit(s[i])) : (i += 1) {
+        result *= 10;
+        result += s[i] - '0';
+    }
+    return result;
+}
 
-    var map = std.StringHashMap(std.ArrayListUnmanaged(Workflow)).init(alloc);
+fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
+    var map = std.StringHashMap([]const u8).init(alloc);
     defer {
-        var values = map.valueIterator();
-        while (values.next()) |value| {
-            value.deinit(alloc);
-        }
         map.deinit();
     }
 
@@ -29,15 +28,28 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         while (line[i] != '{') : (i += 1) {}
 
         const name = line[0..i];
-        const entry = try map.getOrPut(name);
-        var workflow = entry.value_ptr;
-        workflow.* = .{};
+        try map.put(name, line[i + 1 .. line.len - 1]);
+    }
 
-        var parts = std.mem.splitScalar(u8, line[i + 1 .. line.len - 1], ',');
+    const Ranges = [4][2]u16;
+    var stack = std.ArrayListUnmanaged(struct { []const u8, Ranges }){};
+    defer stack.deinit(alloc);
+
+    var accepted = std.ArrayListUnmanaged(Ranges){};
+    defer accepted.deinit(alloc);
+
+    try stack.append(alloc, .{ "in", [1][2]u16{.{ 1, 4000 }} ** 4 });
+
+    while (stack.popOrNull()) |item| {
+        var values = item.@"1";
+
+        const line = map.get(item.@"0").?;
+
+        var parts = std.mem.splitScalar(u8, line, ',');
         while (parts.next()) |part| {
             const colon = std.mem.indexOfScalar(u8, part, ':');
-            if (colon) |c| {
-                const value = try std.fmt.parseInt(u16, part[2..c], 10);
+            const new = if (colon) |c| lbl: {
+                const value = fastParse(u16, part[2..]);
 
                 const variable: u8 = switch (part[0]) {
                     'x' => 0,
@@ -46,22 +58,54 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                     else => 3,
                 };
 
-                try workflow.append(alloc, .{
-                    .condition_op = part[1],
-                    .condition_value = value,
-                    .condition_variable = variable,
-                    .branch = part[c + 1 ..],
-                });
+                const op = part[1];
+                const branch = part[c + 1 ..];
+
+                var right = values[variable];
+                if (op == '<') {
+                    right[0] = value;
+                    values[variable][1] = value - 1;
+                } else {
+                    right[1] = value;
+                    values[variable][0] = value + 1;
+                }
+                const new = .{
+                    branch,
+                    values,
+                };
+                values[variable] = right;
+                break :lbl new;
+            } else .{
+                part,
+                values,
+            };
+
+            if (new.@"0".len == 1) {
+                if (new.@"0"[0] == 'A') {
+                    try accepted.append(alloc, new.@"1");
+                }
             } else {
-                try workflow.append(alloc, .{
-                    .condition_op = 0,
-                    .condition_value = 0,
-                    .condition_variable = 0,
-                    .branch = part,
-                });
+                try stack.append(alloc, new);
             }
         }
     }
+
+    // const ctx = struct {
+    //     fn lessThan(_: void, l: Ranges, r: Ranges) bool {
+    //         inline for (0..4) |i| {
+    //             const first = std.math.order(l[i][0], r[i][0]);
+    //             if (first != .eq) {
+    //                 return first == .lt;
+    //             }
+    //             const second = std.math.order(l[i][1], r[i][1]);
+    //             if (second != .eq) {
+    //                 return second == .lt;
+    //             }
+    //         } else unreachable;
+    //     }
+    // };
+
+    // std.mem.sortUnstable(Ranges, accepted.items, {}, ctx.lessThan);
 
     var acceptedParts: usize = 0;
     while (lines.next()) |line| {
@@ -72,86 +116,48 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
             var i: usize = 2;
             while (j < values.len) : (j += 1) {
                 while (line[i] != '=') : (i += 1) {}
-                const start = i + 1;
-                while (line[i] != ',' and line[i] != '}') : (i += 1) {}
-                const value = try std.fmt.parseInt(u16, line[start..i], 10);
+                i += 1;
+                const value = fastParse(u16, line[i..]);
                 values[j] = value;
                 sum += value;
             }
         }
 
-        var node: []const u8 = "in";
-        while (true) {
-            const workflow = map.get(node).?;
-            for (workflow.items) |item| {
-                const value = values[item.condition_variable];
-                const condition_value = item.condition_value;
-                const condition_op = item.condition_op;
-                const branch = item.branch;
-
-                const result = switch (condition_op) {
-                    '<' => value < condition_value,
-                    '>' => value > condition_value,
-                    else => true,
-                };
-                if (result) {
-                    node = branch;
+        for (accepted.items) |item| {
+            for (0..4) |i| {
+                if (values[i] < item[i][0] or values[i] > item[i][1]) {
                     break;
                 }
-            }
-
-            if (node.len == 1) {
-                if (node[0] == 'A') {
-                    acceptedParts += sum;
-                }
-                break;
+            } else {
+                acceptedParts += sum;
             }
         }
+
+        // const srch = struct {
+        //     fn compareFn(_: void, key: [4]u16, item: Ranges) std.math.Order {
+        //         inline for (0..4) |i| {
+        //             if (key[i] < item[i][0]) {
+        //                 return .lt;
+        //             }
+        //             if (key[i] > item[i][1]) {
+        //                 return .gt;
+        //             }
+        //         } else return .eq;
+        //     }
+        // };
+
+        // if (std.sort.binarySearch(Ranges, values, accepted.items, {}, srch.compareFn)) |_| {
+        //     acceptedParts += sum;
+        // }
     }
 
     var acceptedNumbers: usize = 0;
-
-    var stack = std.ArrayListUnmanaged(struct { []const u8, [4][2]u16 }){};
-    defer stack.deinit(alloc);
-    try stack.append(alloc, .{ "in", [1][2]u16{.{ 1, 4000 }} ** 4 });
-
-    while (stack.popOrNull()) |item| {
-        const node = item.@"0";
-        var values = item.@"1";
-        if (node.len == 1) {
-            if (node[0] == 'A') {
-                var result: usize = 1;
-                for (values) |v| {
-                    result *= (v[1] - v[0] + 1);
-                }
-                acceptedNumbers += result;
-            }
-            continue;
+    for (accepted.items) |a| {
+        var result: usize = 1;
+        for (a) |v| {
+            result *= (v[1] - v[0] + 1);
         }
-
-        const wf = map.get(node).?;
-        for (wf.items) |workflow| {
-            if (workflow.condition_op != 0) {
-                var right = values[workflow.condition_variable];
-                if (workflow.condition_op == '<') {
-                    right[0] = workflow.condition_value;
-                    values[workflow.condition_variable][1] = workflow.condition_value - 1;
-                } else {
-                    right[1] = workflow.condition_value;
-                    values[workflow.condition_variable][0] = workflow.condition_value + 1;
-                }
-                try stack.append(alloc, .{
-                    workflow.branch,
-                    values,
-                });
-                values[workflow.condition_variable] = right;
-            } else {
-                try stack.append(alloc, .{
-                    workflow.branch,
-                    values,
-                });
-            }
-        }
+        acceptedNumbers += result;
     }
 
     return .{ acceptedParts, acceptedNumbers };
