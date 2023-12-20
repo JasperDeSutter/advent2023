@@ -11,7 +11,7 @@ pub fn build(b: *std.build.Builder) !void {
     const run_all_step = b.step("all", "Run all");
 
     var day: u32 = 1;
-    const end: u32 = 19;
+    const end: u32 = 20;
     while (day <= end) : (day += 1) {
         var dayStringBuf: [5]u8 = undefined;
         const dayString = try std.fmt.bufPrint(dayStringBuf[0..], "day{:0>2}", .{day});
@@ -24,7 +24,7 @@ pub fn build(b: *std.build.Builder) !void {
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
         const input_path = b.pathFromRoot(b.fmt("inputdata/{s}.txt", .{dayString}));
-        exe.addAnonymousModule(b.fmt("inputdata/{s}.txt", .{dayString}), .{ .source_file = .{ .path = input_path } });
+        // exe.addAnonymousModule(b.fmt("inputdata/{s}.txt", .{dayString}), .{ .source_file = .{ .path = input_path } });
         run_cmd.addArg(input_path);
         run_all_step.dependOn(&run_cmd.step);
 
