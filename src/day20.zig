@@ -45,8 +45,11 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         var i: usize = 1;
         while (line[i] != ' ') : (i += 1) {}
 
-        try map.put(alloc, line[1..i], .{
-            .outputs = line[i + 4 ..],
+        const outputs = line[i + 4 ..];
+        const name = line[1..i];
+
+        try map.put(alloc, name, .{
+            .outputs = outputs,
             .value = switch (typ) {
                 'b' => .{ .broadcaster = {} },
                 '%' => .{ .flipflop = .{
@@ -64,10 +67,10 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         var outputs = std.mem.splitSequence(u8, it.value_ptr.outputs, ", ");
 
         while (outputs.next()) |output| {
-            var module = map.getEntry(output) orelse continue;
+            var module = map.getPtr(output) orelse continue;
 
-            if (module.value_ptr.value == .conjunction) {
-                try module.value_ptr.value.conjunction.inputs.append(
+            if (module.value == .conjunction) {
+                try module.value.conjunction.inputs.append(
                     alloc,
                     .{ it.key_ptr.*, false },
                 );
@@ -80,27 +83,29 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     defer queue.deinit(alloc);
 
     var pulses = [2]usize{ 0, 0 };
-    for (0..1000) |_| {
+    for (0..1000) |iteration| {
         try queue.append(alloc, .{ "roadcaster", "button", false });
 
         while (popFront(QueueItem, &queue)) |item| {
-            pulses[@intFromBool(item.@"2")] += 1;
+            if (iteration < 1000) {
+                pulses[@intFromBool(item.@"2")] += 1;
+            }
 
-            var module = map.getEntry(item.@"0") orelse continue;
+            var module = map.getPtr(item.@"0") orelse continue;
 
-            var outputs = std.mem.splitSequence(u8, module.value_ptr.outputs, ", ");
+            var outputs = std.mem.splitSequence(u8, module.outputs, ", ");
 
             var pulse = item.@"2";
-            if (module.value_ptr.value == .flipflop) {
+            if (module.value == .flipflop) {
                 if (pulse) {
                     continue;
                 }
-                pulse = !module.value_ptr.value.flipflop.state;
-                module.value_ptr.value.flipflop.state = pulse;
+                pulse = !module.value.flipflop.state;
+                module.value.flipflop.state = pulse;
             }
-            if (module.value_ptr.value == .conjunction) {
+            if (module.value == .conjunction) {
                 var i: usize = 0;
-                var items = module.value_ptr.value.conjunction.inputs.items;
+                var items = module.value.conjunction.inputs.items;
                 pulse = while (i < items.len) : (i += 1) {
                     var it = &items[i];
                     if (std.mem.eql(u8, it.@"0", item.@"1")) {
@@ -111,13 +116,39 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                     }
                 } else false;
             }
+
             while (outputs.next()) |output| {
                 try queue.append(alloc, .{ output, item.@"0", pulse });
             }
         }
     }
 
-    return .{ pulses[0] * pulses[1], 0 };
+    var singleLowPulse: usize = 1;
+    {
+        var chainStarts = std.mem.split(u8, map.getPtr("roadcaster").?.outputs, ", ");
+        while (chainStarts.next()) |root| {
+            var bit: usize = 1;
+            var num: usize = 0;
+            var curr = root;
+            while (true) {
+                var next: ?[]const u8 = null;
+                var outputs = std.mem.split(u8, map.getPtr(curr).?.outputs, ", ");
+                while (outputs.next()) |f| {
+                    switch (map.getPtr(f).?.value) {
+                        .flipflop => next = f,
+                        .conjunction => num |= bit,
+                        else => {},
+                    }
+                }
+                if (next == null) break;
+                curr = next.?;
+                bit = bit << 1;
+            }
+            singleLowPulse *= num;
+        }
+    }
+
+    return .{ pulses[0] * pulses[1], singleLowPulse };
 }
 
 fn popFront(comptime T: type, list: *std.ArrayListUnmanaged(T)) ?T {
