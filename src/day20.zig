@@ -10,7 +10,7 @@ const ModuleTag = enum {
 };
 
 const Module = struct {
-    outputs: []const u8,
+    outputs: std.ArrayListUnmanaged([2]u8),
     value: union(ModuleTag) {
         flipflop: FlipFlop,
         conjunction: Conjunction,
@@ -23,14 +23,15 @@ const FlipFlop = struct {
 };
 
 const Conjunction = struct {
-    inputs: std.ArrayListUnmanaged(struct { []const u8, bool }),
+    inputs: std.ArrayListUnmanaged(struct { [2]u8, bool }),
 };
 
 fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
-    var map = std.StringHashMapUnmanaged(Module){};
+    var map = std.AutoHashMapUnmanaged([2]u8, Module){};
     defer {
         var values = map.valueIterator();
         while (values.next()) |it| {
+            it.outputs.deinit(alloc);
             if (it.value == .conjunction) {
                 it.value.conjunction.inputs.deinit(alloc);
             }
@@ -45,8 +46,18 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         var i: usize = 1;
         while (line[i] != ' ') : (i += 1) {}
 
-        const outputs = line[i + 4 ..];
-        const name = line[1..i];
+        var name: [2]u8 = .{ 0, 0 };
+        const nameTxt = line[1..i];
+        if (nameTxt.len < 3) {
+            name[0] = nameTxt[0];
+            name[1] = nameTxt[1];
+        }
+
+        i += 4;
+        var outputs = std.ArrayListUnmanaged([2]u8){};
+        while (i < line.len) : (i += 4) {
+            try outputs.append(alloc, .{ line[i], line[i + 1] });
+        }
 
         try map.put(alloc, name, .{
             .outputs = outputs,
@@ -64,9 +75,7 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
 
     var values = map.iterator();
     while (values.next()) |it| {
-        var outputs = std.mem.splitSequence(u8, it.value_ptr.outputs, ", ");
-
-        while (outputs.next()) |output| {
+        for (it.value_ptr.outputs.items) |output| {
             var module = map.getPtr(output) orelse continue;
 
             if (module.value == .conjunction) {
@@ -78,22 +87,22 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
         }
     }
 
-    const QueueItem = struct { []const u8, []const u8, bool };
+    const QueueItem = struct { [2]u8, [2]u8, bool };
     var queue = std.ArrayListUnmanaged(QueueItem){};
     defer queue.deinit(alloc);
 
     var pulses = [2]usize{ 0, 0 };
     for (0..1000) |iteration| {
-        try queue.append(alloc, .{ "roadcaster", "button", false });
+        try queue.append(alloc, .{ .{ 0, 0 }, .{ 0, 0 }, false });
 
-        while (popFront(QueueItem, &queue)) |item| {
+        var idx: usize = 0;
+        while (idx < queue.items.len) : (idx += 1) {
+            const item = queue.items[idx];
             if (iteration < 1000) {
                 pulses[@intFromBool(item.@"2")] += 1;
             }
 
             var module = map.getPtr(item.@"0") orelse continue;
-
-            var outputs = std.mem.splitSequence(u8, module.outputs, ", ");
 
             var pulse = item.@"2";
             if (module.value == .flipflop) {
@@ -108,7 +117,7 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                 var items = module.value.conjunction.inputs.items;
                 pulse = while (i < items.len) : (i += 1) {
                     var it = &items[i];
-                    if (std.mem.eql(u8, it.@"0", item.@"1")) {
+                    if (it.@"0"[0] == item.@"1"[0] and it.@"0"[1] == item.@"1"[1]) {
                         it.@"1" = pulse;
                     }
                     if (!it.@"1") {
@@ -117,23 +126,22 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                 } else false;
             }
 
-            while (outputs.next()) |output| {
+            for (module.outputs.items) |output| {
                 try queue.append(alloc, .{ output, item.@"0", pulse });
             }
         }
+        queue.items.len = 0;
     }
 
     var singleLowPulse: usize = 1;
     {
-        var chainStarts = std.mem.split(u8, map.getPtr("roadcaster").?.outputs, ", ");
-        while (chainStarts.next()) |root| {
+        for (map.getPtr(.{ 0, 0 }).?.outputs.items) |root| {
             var bit: usize = 1;
             var num: usize = 0;
             var curr = root;
             while (true) {
-                var next: ?[]const u8 = null;
-                var outputs = std.mem.split(u8, map.getPtr(curr).?.outputs, ", ");
-                while (outputs.next()) |f| {
+                var next: ?[2]u8 = null;
+                for (map.getPtr(curr).?.outputs.items) |f| {
                     switch (map.getPtr(f).?.value) {
                         .flipflop => next = f,
                         .conjunction => num |= bit,
@@ -151,23 +159,13 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     return .{ pulses[0] * pulses[1], singleLowPulse };
 }
 
-fn popFront(comptime T: type, list: *std.ArrayListUnmanaged(T)) ?T {
-    if (list.items.len == 0) {
-        return null;
-    }
-    const res = list.items[0];
-    std.mem.copyForwards(T, list.items[0 .. list.items.len - 1], list.items[1..]);
-    list.items.len -= 1;
-    return res;
-}
-
 test {
     const input =
-        \\broadcaster -> a, b, c
-        \\%a -> b
-        \\%b -> c
-        \\%c -> inv
-        \\&inv -> a
+        \\broadcaster -> aa, bb, cc
+        \\%aa -> bb
+        \\%bb -> cc
+        \\%cc -> in
+        \\&in -> aa
     ;
 
     const result = try solve(std.testing.allocator, input);
@@ -177,11 +175,11 @@ test {
 
 test {
     const input =
-        \\broadcaster -> a
-        \\%a -> inv, con
-        \\&inv -> b
-        \\%b -> con
-        \\&con -> output
+        \\broadcaster -> aa
+        \\%aa -> in, co
+        \\&in -> bb
+        \\%bb -> co
+        \\&co -> ou
     ;
 
     const result = try solve(std.testing.allocator, input);
