@@ -6,18 +6,15 @@ pub const main = runner.run("12", solve);
 fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var solutions: usize = 0;
 
-    var toSolve = std.ArrayListUnmanaged(struct { []const u8, std.ArrayListUnmanaged(u8) }){};
-    defer {
-        var j: usize = 0;
-        while (j < toSolve.items.len) : (j += 1) {
-            toSolve.items[j].@"1".deinit(alloc);
-        }
-        toSolve.deinit(alloc);
-    }
+    var toSolve = std.ArrayListUnmanaged([2]u8){};
+    defer toSolve.deinit(alloc);
+
+    var numbers = std.ArrayListUnmanaged(u8){};
+    defer numbers.deinit(alloc);
 
     var i: usize = 0;
     while (i < input.len) {
-        var numbers = std.ArrayListUnmanaged(u8){};
+        numbers.items.len = 0;
 
         const start = i;
         while (i < input.len and input[i] != ' ') : (i += 1) {}
@@ -40,75 +37,56 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
             }
         }
         try numbers.append(alloc, current_number);
-
-        std.mem.reverse(u8, numbers.items);
-
-        try toSolve.append(alloc, .{ left, numbers });
+        toSolve.items.len = 0;
+        solutions += try impl(alloc, &toSolve, left, numbers.items);
     }
+    return .{ solutions, 0 };
+}
+
+fn impl(alloc: std.mem.Allocator, toSolve: *std.ArrayListUnmanaged([2]u8), inputText: []const u8, inputNumbers: []u8) !u16 {
+    var solutions: u16 = 0;
+    try toSolve.append(alloc, .{ 0, 0 });
 
     while (toSolve.popOrNull()) |item| {
-        const text = item.@"0";
-        var numbers = item.@"1";
-        if (numbers.items.len == 0) {
+        const text = inputText[item[0]..];
+        const numbers = inputNumbers[item[1]..];
+        if (numbers.len == 0) {
             if (std.mem.indexOf(u8, text, "#") == null) {
                 solutions += 1;
             }
-            numbers.deinit(alloc);
             continue;
         }
-        if (text.len < 1) {
-            numbers.deinit(alloc);
+        if (text.len == 0) {
             continue;
         }
 
-        var appended = false;
         const c = text[0];
         if (c != '#') {
-            var j: usize = 1;
+            var j: u8 = 1;
             while (j < text.len and text[j] == '.') {
                 j += 1;
             }
-            toSolve.appendAssumeCapacity(.{ text[j..], numbers });
+            toSolve.appendAssumeCapacity(.{ item[0] + j, item[1] });
             if (c == '.') continue;
-            appended = true;
         }
-
-        if (numbers.popOrNull()) |number| {
-            if (text.len >= number) {
-                for (text[0..number]) |ch| {
-                    if (ch != '#' and ch != '?') {
-                        break;
-                    }
-                } else {
-                    if (text.len > number) {
-                        if (text[number] == '#') {
-                            if (!appended) numbers.deinit(alloc);
-                            continue;
-                        }
-                        if (appended) {
-                            numbers = try numbers.clone(alloc);
-                            try toSolve.append(alloc, .{ text[(number + 1)..], numbers });
-                        } else {
-                            toSolve.appendAssumeCapacity(.{ text[(number + 1)..], numbers });
-                        }
-                    } else {
-                        if (appended) {
-                            numbers = try numbers.clone(alloc);
-                            try toSolve.append(alloc, .{ text[number..], numbers });
-                        } else {
-                            toSolve.appendAssumeCapacity(.{ text[number..], numbers });
-                        }
-                    }
-                    appended = true;
+        var n = numbers[0];
+        if (text.len >= n) {
+            for (text[0..n]) |ch| {
+                if (ch != '#' and ch != '?') {
+                    break;
                 }
+            } else {
+                if (text.len > n) {
+                    if (text[n] == '#') {
+                        continue;
+                    }
+                    n += 1;
+                }
+                try toSolve.append(alloc, .{ item[0] + n, item[1] + 1 });
             }
         }
-
-        if (!appended)
-            numbers.deinit(alloc);
     }
-
-    return .{ solutions, 0 };
+    return solutions;
 }
 
 test {
