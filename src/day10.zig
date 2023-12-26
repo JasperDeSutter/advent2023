@@ -30,15 +30,14 @@ fn match(cur: usize, prev: usize, lineLength: usize, dir: Dir) bool {
 
 fn apply(cur: usize, lineLength: usize, dir: Dir) usize {
     switch (dir) {
-        Dir.Left => return cur - 1,
+        Dir.Left => return cur -% 1,
         Dir.Right => return cur + 1,
         Dir.Down => return cur + lineLength,
-        Dir.Up => return cur - lineLength,
+        Dir.Up => return cur -% lineLength,
     }
 }
 
 fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
-    _ = alloc;
     var lineLength: usize = 0;
     while (input[lineLength] != '\n') : (lineLength += 1) {}
     lineLength += 1;
@@ -46,8 +45,13 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     var start: usize = 0;
     while (input[start] != 'S') : (start += 1) {}
 
+    const map = try alloc.alloc(u8, input.len);
+    defer alloc.free(map);
+
     const options: [3]usize = .{ start + 1, start - 1, start + lineLength };
     const steps = outer: for (&options) |opt| {
+        @memset(map, 0);
+        map[start] = 3;
         var prev = start;
         var cur = opt;
         var steps: usize = 0;
@@ -58,25 +62,76 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
                 break :outer steps;
             }
             const c = input[cur];
+            map[cur] = 3;
             const p = prev;
             prev = cur;
-            var newDir: Dir = undefined;
+            var newDir: struct { Dir, []const Dir, []const Dir } = undefined;
             inline for (directions) |dir| {
                 if (dir[0] == c) {
                     if (match(cur, p, lineLength, dir[1])) {
-                        newDir = dir[2];
+                        newDir = .{ dir[2], &dir[4], &dir[3] };
                     } else if (match(cur, p, lineLength, dir[2])) {
-                        newDir = dir[1];
+                        newDir = .{ dir[1], &dir[3], &dir[4] };
                     } else {
                         break :opt;
                     }
                 }
             }
-            cur = apply(cur, lineLength, newDir);
+            for (newDir.@"1") |dir| {
+                const spot = apply(cur, lineLength, dir);
+                if (spot < map.len and map[spot] == 0) map[spot] = 1;
+            }
+            for (newDir.@"2") |dir| {
+                const spot = apply(cur, lineLength, dir);
+                if (spot < map.len and map[spot] == 0) map[spot] = 2;
+            }
+            cur = apply(cur, lineLength, newDir.@"0");
         }
     } else 0;
 
-    return .{ steps / 2, 0 };
+    var out: u8 = 0;
+    for (map[0..lineLength]) |c| {
+        if (c == 1 or c == 2) {
+            out = c;
+            break;
+        }
+    } else {
+        for (map[map.len - lineLength .. map.len]) |c| {
+            if (c == 1 or c == 2) {
+                out = c;
+                break;
+            }
+        }
+    }
+
+    const in = 3 - out;
+    var totalIn: usize = 0;
+    for (map, 0..) |c, i| {
+        if (c == 3) continue;
+        if (c == out) continue;
+
+        if (c == 0) {
+            if (i > 0) {
+                if (i > lineLength - 1) {
+                    const prev = map[i - lineLength];
+                    if (prev == in) {
+                        map[i] = in;
+                        totalIn += 1;
+                        continue;
+                    }
+                }
+                const prev = map[i - 1];
+                if (prev == in) {
+                    map[i] = in;
+                    totalIn += 1;
+                }
+            }
+        } else {
+            totalIn += 1;
+        }
+    }
+
+    return .{ steps / 2, totalIn };
 }
 
 test "part1 ex1" {
