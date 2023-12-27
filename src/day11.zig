@@ -12,63 +12,52 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     return .{ try impl(alloc, input, 1), try impl(alloc, input, 1000000 - 1) };
 }
 
-fn impl(alloc: std.mem.Allocator, input: []const u8, increment: usize) !usize {
-    var x: usize = 0;
-    var y: usize = 0;
-    var lineLength: usize = 0;
+fn impl(alloc: std.mem.Allocator, input: []const u8, increment: u32) !usize {
+    // const lineLength = 140;
+    // var mem: [lineLength + lineLength]u8 = undefined;
+    const lineLength = std.mem.indexOfScalar(u8, input, '\n').?;
+    var mem = try alloc.alloc(u8, lineLength + lineLength);
+    defer alloc.free(mem);
 
-    var galaxies = std.ArrayList([2]usize).init(alloc);
-    defer galaxies.deinit();
-    var distances: usize = 0;
+    var rowCounts = mem[0..lineLength];
+    var colCounts = mem[lineLength..];
+    @memset(colCounts, 0);
 
-    var foundGalaxy = false;
-    for (input) |c| {
-        if (c == '\n') {
-            if (!foundGalaxy) {
-                y += increment;
-            }
-            lineLength = x;
-            x = 0;
-            y += 1;
-            foundGalaxy = false;
-            continue;
-        }
+    var rowCount: u8 = 0;
+    var row: usize = 0;
+    for (input, 0..) |c, i| {
         if (c == '#') {
-            try galaxies.append(.{ x, y });
-            foundGalaxy = true;
+            rowCount += 1;
+            colCounts[i % (lineLength + 1)] += 1;
         }
-
-        x += 1;
-    }
-
-    var unfound = std.ArrayList(usize).init(alloc);
-    defer unfound.deinit();
-
-    for (0..lineLength) |i| {
-        for (galaxies.items) |galaxy| {
-            if (galaxy[0] == i) {
-                break;
-            }
-        } else {
-            try unfound.append(i + (unfound.items.len * increment));
+        if (c == '\n') {
+            rowCounts[row] = rowCount;
+            rowCount = 0;
+            row += 1;
         }
     }
+    rowCounts[row] = rowCount;
 
-    for (0..galaxies.items.len) |i| {
-        const galaxy = &galaxies.items[i];
+    return prefix_sum(rowCounts, increment) + prefix_sum(colCounts, increment);
+}
 
-        for (unfound.items) |col| {
-            if (col > galaxy[0]) break;
-            galaxy[0] += increment;
+fn prefix_sum(counts: []const u8, increment: u32) u64 {
+    var result: u64 = 0;
+    var total_sum: u64 = 0;
+    var offset: u64 = 0;
+    var galaxy: usize = 0;
+    for (counts, 0..) |c, i| {
+        const expanded_rowcol_index = i + offset;
+        for (0..c) |_| {
+            result += galaxy * expanded_rowcol_index - total_sum;
+            total_sum += expanded_rowcol_index;
+            galaxy +%= 1;
         }
-
-        for (galaxies.items[0..i]) |galaxy2| {
-            const dist = distance(galaxy[0], galaxy2[0]) + distance(galaxy[1], galaxy2[1]);
-            distances += dist;
+        if (c == 0) {
+            offset += increment;
         }
     }
-
-    return distances;
+    return result;
 }
 
 test {
