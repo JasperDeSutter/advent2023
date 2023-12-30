@@ -10,7 +10,7 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     state.tiltNorth();
     const loadSingleTilt = state.load();
 
-    var map = std.AutoHashMapUnmanaged(u64, u16){};
+    var map = std.AutoHashMapUnmanaged(u32, u16){};
     defer map.deinit(alloc);
 
     var tilts: u16 = 1;
@@ -121,58 +121,52 @@ const State = struct {
         alloc.free(self.stacks);
     }
 
-    fn cycle(self: *@This(), comptime skipFirst: bool) u64 {
+    fn cycle(self: *@This(), skipFirst: bool) u32 {
         if (!skipFirst) {
-            tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, self.cols, false);
+            self.tilt2(self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, false);
         }
-        tilt(self.stacks, self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[1].items, self.cols, true);
-        const tiltN: u64 = @intCast(self.load());
-        tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[2].items, self.cols, false);
-        tilt(self.stacks, self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[3].items, self.cols, true);
-        const tiltS = self.load();
-        return (tiltN << 32) | tiltS;
+        self.tilt2(self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[1].items, true);
+        const tiltN = self.load2();
+        self.tilt2(self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[2].items, false);
+        self.tilt2(self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[3].items, true);
+        const tiltS = self.load2();
+        return tiltN ^ @byteSwap(tiltS);
+    }
+
+    fn tilt2(self: *@This(), co1: []u8, co2: []const u8, distanceMap: []const i8, comptime xy: bool) void {
+        tilt(co1, co2, distanceMap, self.stacks, self.cols, xy);
     }
 
     fn tiltNorth(self: *@This()) void {
-        tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, self.cols, false);
+        self.tilt2(self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, false);
     }
 
-    fn load(self: *@This()) usize {
-        var ret: usize = 0;
-        const rows = self.rows;
+    fn load(self: *@This()) u32 {
+        var ret: u32 = 0;
+        const rows: u32 = @intCast(self.rows);
         for (self.roundStones[1].items) |y| ret += (rows - y);
+        return ret;
+    }
+
+    fn load2(self: *@This()) u32 {
+        var ret: u32 = 0;
+        for (self.roundStones[1].items) |y| ret += y;
         return ret;
     }
 };
 
-fn tilt(stacks: []u8, co1: []u8, co2: []const u8, distanceMap: []const i8, stride: usize, comptime xy: bool) void {
+fn tilt(co1: []u8, co2: []const u8, distanceMap: []const i8, stacks: []u8, stride: usize, comptime xy: bool) void {
     @memset(stacks, 0);
     for (co1, co2, 0..) |c1, c2, i| {
         const off = if (xy) c1 + c2 * stride else c1 * stride + c2;
-        const dist = distanceMap[off];
-        const c1i: isize = @intCast(c1);
-        const square: usize = @intCast(@min(stride - 1, @max(0, c1i + dist)));
-        const stack = &stacks[if (xy) square + c2 * stride else square * stride + c2]; // branch
-        const s = stack.* + 1;
-        stack.* = s;
+        const dist: u8 = @bitCast(distanceMap[off]);
+        const square: usize = @min(stride - 1, c1 +% dist);
+        const stack = &stacks[if (xy) square + c2 * stride else square * stride + c2];
 
-        const adist: u8 = @intCast(@abs(dist));
-        const move = if (s > adist) m: { // TODO: this can be simplified
-            const m: i8 = @intCast(s - adist);
-            if (dist < 0) {
-                break :m m;
-            }
-            break :m -m;
-        } else m: {
-            const m: i8 = @intCast(adist - s);
-            if (dist < 0) {
-                break :m -m;
-            }
-            break :m m;
-        };
-        if (move != 0) {
-            co1[i] = @intCast(c1i + move);
-        }
+        const add: u8 = if (dist > 127) 255 else 1;
+        const s = stack.* +% add;
+        stack.* = s;
+        co1[i] = c1 +% dist -% s;
     }
 }
 
