@@ -4,89 +4,21 @@ const runner = @import("runner.zig");
 pub const main = runner.run("14", solve);
 
 fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
-    // x, y
-    var roundStones = [_]std.ArrayListUnmanaged(u7){.{}} ** 2;
+    var state = try State.init(alloc, input);
+    defer state.deinit(alloc);
 
-    // north, west, south, east
-    var distanceMap = [_]std.ArrayListUnmanaged(i8){.{}} ** 4;
-    defer {
-        for (0..roundStones.len) |stone| roundStones[stone].deinit(alloc);
-        for (0..distanceMap.len) |stone| distanceMap[stone].deinit(alloc);
-    }
-
-    const lineLength = std.mem.indexOfScalar(u8, input, '\n').? + 1;
-    const rows = (input.len + 1) / lineLength;
-    const cols = lineLength - 1;
-
-    for (0..distanceMap.len) |i| {
-        try distanceMap[i].ensureTotalCapacity(alloc, rows * cols);
-    }
-
-    for (input, 0..) |c, i| {
-        if (c == '\n') continue;
-        const row: u7 = @intCast(i / lineLength);
-        const col: u7 = @intCast(i % lineLength);
-        if (c == 'O') {
-            try roundStones[0].append(alloc, (col));
-            try roundStones[1].append(alloc, (row));
-        }
-
-        var north: i8 = row + 1;
-        north = -north;
-        var south: i8 = @intCast(rows - row);
-        for (0..rows) |j| {
-            const off = j * lineLength + col;
-            if (input[off] == '#') {
-                var dist: i8 = @intCast(j);
-                dist -= row;
-                if (dist <= 0) {
-                    north = dist;
-                }
-                if (dist >= 0) {
-                    south = dist;
-                    break;
-                }
-            }
-        }
-        var west: i8 = col + 1;
-        west = -west;
-        var east: i8 = @intCast(cols - col);
-        for (0..cols) |j| {
-            const off = row * lineLength + j;
-            if (input[off] == '#') {
-                var dist: i8 = @intCast(j);
-                dist -= col;
-                if (dist <= 0) {
-                    west = dist;
-                }
-                if (dist >= 0) {
-                    east = dist;
-                    break;
-                }
-            }
-        }
-
-        distanceMap[0].appendAssumeCapacity(@intCast(north));
-        distanceMap[1].appendAssumeCapacity(@intCast(west));
-        distanceMap[2].appendAssumeCapacity(@intCast(south));
-        distanceMap[3].appendAssumeCapacity(@intCast(east));
-    }
-
-    const stacks = try alloc.alloc(u7, rows * cols);
-    defer alloc.free(stacks);
-
-    tilt(stacks, roundStones[1].items, roundStones[0].items, distanceMap[0].items, cols, false);
-    const loadSingleTilt = load(roundStones[1].items, rows);
+    state.tiltNorth();
+    const loadSingleTilt = state.load();
 
     var map = std.AutoHashMapUnmanaged(u64, u16){};
     defer map.deinit(alloc);
 
     var tilts: u16 = 1;
-    try map.put(alloc, cycle(stacks, &roundStones, &distanceMap, cols, rows, true), tilts);
+    try map.put(alloc, state.cycle(true), tilts);
 
     const looped = while (true) {
         tilts += 1;
-        const key = cycle(stacks, &roundStones, &distanceMap, cols, rows, false);
+        const key = state.cycle(false);
         const res = try map.getOrPut(alloc, key);
 
         if (res.found_existing) {
@@ -99,41 +31,132 @@ fn solve(alloc: std.mem.Allocator, input: []const u8) anyerror![2]usize {
     const t: usize = @intCast(tilts);
     const remainder = @rem(1_000_000_000 - t, looped);
     for (0..remainder) |_| {
-        _ = cycle(stacks, &roundStones, &distanceMap, cols, rows, false);
+        _ = state.cycle(false);
     }
 
-    return .{ loadSingleTilt, load(roundStones[1].items, rows) };
+    return .{ loadSingleTilt, state.load() };
 }
 
-fn cycle(stacks: []u7, roundStones: *[2]std.ArrayListUnmanaged(u7), distanceMap: *[4]std.ArrayListUnmanaged(i8), cols: usize, rows: usize, comptime skipFirst: bool) u64 {
-    if (!skipFirst) {
-        tilt(stacks, roundStones[1].items, roundStones[0].items, distanceMap[0].items, cols, false);
+const State = struct {
+    // x, y
+    roundStones: [2]std.ArrayListUnmanaged(u8) = [_]std.ArrayListUnmanaged(u8){.{}} ** 2,
+    // north, west, south, east
+    distanceMap: [4]std.ArrayListUnmanaged(i8) = [_]std.ArrayListUnmanaged(i8){.{}} ** 4,
+    stacks: []u8,
+    rows: usize,
+    cols: usize,
+
+    fn init(alloc: std.mem.Allocator, input: []const u8) !@This() {
+        const lineLength = std.mem.indexOfScalar(u8, input, '\n').? + 1;
+        const rows = (input.len + 1) / lineLength;
+        const cols = lineLength - 1;
+
+        var self = @This(){
+            .stacks = try alloc.alloc(u8, rows * cols),
+            .rows = rows,
+            .cols = cols,
+        };
+        errdefer self.deinit(alloc);
+
+        for (0..self.distanceMap.len) |i| {
+            try self.distanceMap[i].ensureTotalCapacity(alloc, rows * cols);
+        }
+
+        for (input, 0..) |c, i| {
+            if (c == '\n') continue;
+            const row: u7 = @intCast(i / lineLength);
+            const col: u7 = @intCast(i % lineLength);
+            if (c == 'O') {
+                try self.roundStones[0].append(alloc, col);
+                try self.roundStones[1].append(alloc, row);
+            }
+
+            var north: i8 = row + 1;
+            north = -north;
+            var south: i8 = @intCast(rows - row);
+            for (0..rows) |j| {
+                const off = j * lineLength + col;
+                if (input[off] == '#') {
+                    var dist: i8 = @intCast(j);
+                    dist -= row;
+                    if (dist <= 0) {
+                        north = dist;
+                    }
+                    if (dist >= 0) {
+                        south = dist;
+                        break;
+                    }
+                }
+            }
+            var west: i8 = col + 1;
+            west = -west;
+            var east: i8 = @intCast(cols - col);
+            for (0..cols) |j| {
+                const off = row * lineLength + j;
+                if (input[off] == '#') {
+                    var dist: i8 = @intCast(j);
+                    dist -= col;
+                    if (dist <= 0) {
+                        west = dist;
+                    }
+                    if (dist >= 0) {
+                        east = dist;
+                        break;
+                    }
+                }
+            }
+
+            self.distanceMap[0].appendAssumeCapacity(@intCast(north));
+            self.distanceMap[1].appendAssumeCapacity(@intCast(west));
+            self.distanceMap[2].appendAssumeCapacity(@intCast(south));
+            self.distanceMap[3].appendAssumeCapacity(@intCast(east));
+        }
+
+        return self;
     }
-    const tiltN: u64 = @intCast(load(roundStones[1].items, rows));
-    tilt(stacks, roundStones[0].items, roundStones[1].items, distanceMap[1].items, cols, true);
-    tilt(stacks, roundStones[1].items, roundStones[0].items, distanceMap[2].items, cols, false);
-    const tiltS = load(roundStones[1].items, rows);
-    tilt(stacks, roundStones[0].items, roundStones[1].items, distanceMap[3].items, cols, true);
-    return (tiltN << 32) | tiltS;
-}
 
-fn load(ys: []const u7, rows: usize) usize {
-    var ret: usize = 0;
-    for (ys) |y| ret += (rows - y);
-    return ret;
-}
+    fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        for (0..self.roundStones.len) |stone| self.roundStones[stone].deinit(alloc);
+        for (0..self.distanceMap.len) |stone| self.distanceMap[stone].deinit(alloc);
+        alloc.free(self.stacks);
+    }
 
-fn tilt(stacks: []u7, co1: []u7, co2: []const u7, distanceMap: []const i8, stride: usize, comptime xy: bool) void {
+    fn cycle(self: *@This(), comptime skipFirst: bool) u64 {
+        if (!skipFirst) {
+            tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, self.cols, false);
+        }
+        tilt(self.stacks, self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[1].items, self.cols, true);
+        const tiltN: u64 = @intCast(self.load());
+        tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[2].items, self.cols, false);
+        tilt(self.stacks, self.roundStones[0].items, self.roundStones[1].items, self.distanceMap[3].items, self.cols, true);
+        const tiltS = self.load();
+        return (tiltN << 32) | tiltS;
+    }
+
+    fn tiltNorth(self: *@This()) void {
+        tilt(self.stacks, self.roundStones[1].items, self.roundStones[0].items, self.distanceMap[0].items, self.cols, false);
+    }
+
+    fn load(self: *@This()) usize {
+        var ret: usize = 0;
+        const rows = self.rows;
+        for (self.roundStones[1].items) |y| ret += (rows - y);
+        return ret;
+    }
+};
+
+fn tilt(stacks: []u8, co1: []u8, co2: []const u8, distanceMap: []const i8, stride: usize, comptime xy: bool) void {
     @memset(stacks, 0);
     for (co1, co2, 0..) |c1, c2, i| {
         const off = if (xy) c1 + c2 * stride else c1 * stride + c2;
         const dist = distanceMap[off];
-        const square: usize = @intCast(@min(stride - 1, @max(0, c1 + dist)));
-        const stack = &stacks[if (xy) square + c2 * stride else square * stride + c2];
+        const c1i: isize = @intCast(c1);
+        const square: usize = @intCast(@min(stride - 1, @max(0, c1i + dist)));
+        const stack = &stacks[if (xy) square + c2 * stride else square * stride + c2]; // branch
         const s = stack.* + 1;
         stack.* = s;
 
-        const adist: u7 = @intCast(@abs(dist));
+        const adist: u8 = @intCast(@abs(dist));
         const move = if (s > adist) m: { // TODO: this can be simplified
             const m: i8 = @intCast(s - adist);
             if (dist < 0) {
@@ -148,7 +171,7 @@ fn tilt(stacks: []u7, co1: []u7, co2: []const u7, distanceMap: []const i8, strid
             break :m m;
         };
         if (move != 0) {
-            co1[i] = @intCast(c1 + move);
+            co1[i] = @intCast(c1i + move);
         }
     }
 }
